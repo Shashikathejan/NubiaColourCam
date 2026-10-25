@@ -1,3 +1,4 @@
+
 name: Build Nubia ColourCam APK
 
 on:
@@ -27,7 +28,7 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
 
-      - name: Ensure sdkmanager is available
+      - name: Find Android SDK Manager
         shell: bash
         run: |
           SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
@@ -39,20 +40,33 @@ jobs:
             -type f -name sdkmanager 2>/dev/null | head -n 1)"
 
           if [ -z "$SDKMANAGER" ]; then
-            echo "ERROR: sdkmanager was not found."
-            echo "Android SDK directory: $SDK_ROOT"
-            find "$SDK_ROOT" -type f -name sdkmanager 2>/dev/null || true
+            echo "::error::Android SDK manager was not found."
             exit 1
           fi
 
-          echo "sdkmanager found at: $SDKMANAGER"
           echo "$(dirname "$SDKMANAGER")" >> "$GITHUB_PATH"
           echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
 
       - name: Install Android SDK packages
-        shell: bash
         run: |
           sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Check Android Project
+        shell: bash
+        run: |
+          if [ ! -f "settings.gradle.kts" ] && \
+             [ ! -f "settings.gradle" ]; then
+            echo "::error::Gradle settings file not found."
+            exit 1
+          fi
+
+          if [ ! -f "app/build.gradle.kts" ] && \
+             [ ! -f "app/build.gradle" ]; then
+            echo "::error::App module Gradle file is missing."
+            echo "Expected app/build.gradle.kts or app/build.gradle"
+            echo "Check that the Android app module is committed to GitHub."
+            exit 1
+          fi
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -60,7 +74,7 @@ jobs:
           gradle-version: "8.9"
 
       - name: Build Debug APK
-        run: gradle --no-daemon assembleDebug
+        run: gradle --no-daemon :app:assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
